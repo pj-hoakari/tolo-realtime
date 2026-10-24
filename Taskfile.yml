@@ -111,6 +111,7 @@ tasks:
     proto:write-operation:
         desc: Write operation proto from the tolo-operation module to proto directory.
         cmds:
+          - go mod download github.com/pj-hoakari/tolo-operation
           - mkdir -p proto/tolo/operation/v1
           - install -m 644 "$(go list -m -f '{{"{{.Dir}}"}}' github.com/pj-hoakari/tolo-operation)/proto/tolo/operation/v1/operation.proto" proto/tolo/operation/v1/
 
