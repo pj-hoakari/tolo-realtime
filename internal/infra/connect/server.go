@@ -15,8 +15,7 @@ import (
 	"github.com/pj-hoakari/internal-jwt-handling/jwks"
 	"github.com/pj-hoakari/internal-jwt-handling/verifier"
 
-	"github.com/pj-hoakari/tolo-realtime/gen/greet/v1/greetv1connect"
-	"github.com/pj-hoakari/tolo-realtime/internal/application"
+	"github.com/pj-hoakari/tolo-realtime/gen/tolo/realtime/v1/realtimev1connect"
 )
 
 // Defaults for verifying internal JWTs. The issuer is the Service Gateway's
@@ -48,7 +47,11 @@ func DefaultJWTSettings() JWTSettings {
 
 // RoutesWithJWTSettings builds the service routes that verify internal
 // JWTs against the JWKS the settings locate.
-func RoutesWithJWTSettings(greetService application.GreetUseCases, settings JWTSettings) (func(mux *http.ServeMux), error) {
+func RoutesWithJWTSettings(
+	fetch DeliveryFetchUseCase,
+	tokens FirestoreTokenUseCase,
+	settings JWTSettings,
+) (func(mux *http.ServeMux), error) {
 	cache, err := jwks.New(jwks.Config{
 		URL:             settings.JWKSURL,
 		HTTPClient:      nil,
@@ -68,13 +71,16 @@ func RoutesWithJWTSettings(greetService application.GreetUseCases, settings JWTS
 		return nil, fmt.Errorf("create internal JWT verifier: %w", err)
 	}
 
-	return RoutesWithVerifier(greetService, tokenVerifier)
+	return RoutesWithVerifier(fetch, tokens, tokenVerifier)
 }
 
 // RoutesWithVerifier builds the service routes around a verifier of the
 // internal JWT. The service is guarded by an interceptor built from its
 // generated policy table, so the credential rules stay declared in the proto.
-func RoutesWithVerifier(greetService application.GreetUseCases, tokenVerifier interceptor.TokenVerifier) (func(mux *http.ServeMux), error) {
+func RoutesWithVerifier(
+	fetch DeliveryFetchUseCase,
+	tokens FirestoreTokenUseCase,
+	tokenVerifier interceptor.TokenVerifier) (func(mux *http.ServeMux), error) {
 	// The caller sits behind the Service Gateway, so an incoming trace context is
 	// trusted and continued instead of being demoted to a span link.
 	tracing, err := otelconnect.NewServerInterceptor(otelconnect.WithTrustRemote())
@@ -84,17 +90,17 @@ func RoutesWithVerifier(greetService application.GreetUseCases, tokenVerifier in
 
 	auth, err := interceptor.New(
 		tokenVerifier,
-		greetv1connect.GreetServicePolicies,
+		realtimev1connect.RealtimeFetchServicePolicies,
 		interceptor.WithErrorReporter(reportAuthRejection),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("create GreetService authentication interceptor: %w", err)
+		return nil, fmt.Errorf("create RealtimeFetchService authentication interceptor: %w", err)
 	}
 
 	// Tracing runs before authentication, so a rejected call is still recorded
 	// on the trace it belongs to.
 	server := connectrpc.NewServer(tracing, auth)
-	greetv1connect.RegisterGreetServiceHandler(server, NewService(greetService))
+	realtimev1connect.RegisterRealtimeFetchServiceHandler(server, NewRealtimeFetchService(fetch, tokens))
 
 	return func(mux *http.ServeMux) {
 		connecthttp.Mount(mux, server)

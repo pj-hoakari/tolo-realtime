@@ -26,9 +26,19 @@ golangci-lint run
 
 `go test ./...` は統合テストで PostgreSQL コンテナを起動するため、Docker が必要
 
+### e2e テスト
+
+```bash
+task e2e
+```
+
+Docker Compose で PostgreSQL、Firebase のエミュレータ、サーバー、e2e テストのコンテナを起動し、e2e テストの終了コードで終わる。終了後に `docker compose --profile e2e down -v` で片付ける  
+e2e テストのコンテナは内部 JWT の JWKS を `:8080` で配信し、サーバーはそれを `INTERNAL_JWKS_URL=http://e2e:8080` で参照する  
+push の受け口に `DeliveryOrder` を送り、配信ログ、Firestore の最終更新 ID 文書、`FetchDeliveries`、`IssueFirestoreToken` のカスタムトークンとセキュリティルールを確かめる
+
 ### Docker Compose での起動
 
-Docker Compose で PostgreSQL、golang-migrate によるマイグレーション、および開発サーバーを起動できる
+Docker Compose で PostgreSQL、golang-migrate によるマイグレーション、Firebase のエミュレータ、および開発サーバーを起動できる
 
 ```bash
 docker compose up --build
@@ -40,6 +50,7 @@ task up:build
 ```
 
 サーバーは `http://localhost:8080`、PostgreSQL は `localhost:5432` で待ち受ける（停止は `task down`）  
+Firebase のエミュレータは、Edge Bridge Service と共有するものを tolo-edge-bridge の `firebase-emulator/` からコミットを固定してビルドする。ホストへは Firestore を `localhost:8081`、Firebase Auth を `localhost:9099`、Emulator UI を `http://localhost:4000` で公開する  
 Compose の `migrate` サービスは `Dockerfile` の `migrate` ターゲットをビルドして起動するため、`migrations/` を追加・変更したあとは `--build` 付き（`docker compose up --build` または `task up:build`）で起動し直す  
 `task up` はイメージを再ビルドしないので、古いマイグレーションのままになる  
 RPC を呼び出すには Service Gateway 発行の内部 JWT が必要なので、`go tool jwtgen` で生成した JWKS を配信する URL を `INTERNAL_JWKS_URL` で `server` に渡す（「内部 JWT」を参照）
@@ -50,6 +61,8 @@ RPC を呼び出すには Service Gateway 発行の内部 JWT が必要なので
 | --- | --- | --- |
 | `SERVER_ADDR` | `:8080` | 待ち受けるアドレス |
 | `DATABASE_URL` | なし（必須） | PostgreSQL の接続先 |
+| `FIRESTORE_PROJECT_ID` | なし（必須） | 最終更新 ID 文書を書く Firestore と、カスタムトークンを発行する Firebase Auth のプロジェクト |
+| `FIRESTORE_EMULATOR_HOST` / `FIREBASE_AUTH_EMULATOR_HOST` | なし | 設定すると Firestore と Firebase Auth のエミュレータに接続する。Compose では `firebase-emulator:8080` と `firebase-emulator:9099` |
 | `INTERNAL_JWKS_URL` | `http://gateway:8080/.well-known/jwks.json` | 内部 JWT の検証に使う JWKS の取得先 |
 | `INTERNAL_JWT_ISSUER` | `service-gateway` | 内部 JWT に期待する `iss` |
 | `INTERNAL_JWT_AUDIENCE` | `tolo-realtime` | 内部 JWT に期待する `aud` |
@@ -60,6 +73,12 @@ RPC を呼び出すには Service Gateway 発行の内部 JWT が必要なので
 
 ヘッダ・TLS・タイムアウトなどその他の `OTEL_EXPORTER_OTLP_*` は exporter がそのまま解釈する  
 ログは標準出力へ 1 行 1 件の JSON で書き出す
+
+### push の受け口
+
+`realtime-delivery` の push は `POST /push/realtime-delivery` で受ける。Service Gateway を経由せず、内部 JWT も要求しない。到達を許す呼び出し元の制限はプラットフォームに任せる  
+本文は `tolo.operation.v1.DeliveryOrder` のバイト列で、配信ログに追記したうえで、Firestore の `deliveryNotifications/{event_id}` の `latestDeliveryId` をそのイベントの最後に届いた `delivery_id` に書き換える。同じ `delivery_id` の再配信は配信ログに追記せず、Firestore だけを書き直す  
+応答は、処理できたときと、復号できない本文を捨てたときが 204、配信ログか Firestore に書けなかったときが 503 である
 
 ### マイグレーション
 

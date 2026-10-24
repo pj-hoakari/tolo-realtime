@@ -74,6 +74,14 @@ tasks:
         cmds:
             - docker compose -f compose.yml -f compose.o11y.yml up -d --build
 
+    e2e:
+        desc: Run the end-to-end tests against the server, PostgreSQL and the Firebase emulators in compose.
+        env:
+            INTERNAL_JWKS_URL: http://e2e:8080
+        cmds:
+            - defer: docker compose --profile e2e down -v
+            - docker compose --profile e2e up --build --abort-on-container-exit --exit-code-from e2e --attach server --attach e2e
+
     down:
         desc: Stop the development environment.
         cmds:
@@ -95,10 +103,23 @@ tasks:
         cmds:
           - go tool protoc-gen-authz-go --write-proto proto
 
+    proto:write-kernel:
+        desc: Write kernel proto to proto directory.
+        cmds:
+          - go tool tolo-kernel-proto --write-proto proto
+
+    proto:write-operation:
+        desc: Write operation proto from the tolo-operation module to proto directory.
+        cmds:
+          - mkdir -p proto/tolo/operation/v1
+          - install -m 644 "$(go list -m -f '{{"{{.Dir}}"}}' github.com/pj-hoakari/tolo-operation)/proto/tolo/operation/v1/operation.proto" proto/tolo/operation/v1/
+
     proto:lint:
         desc: Lint proto.
         deps:
           - proto:write-authz
+          - proto:write-kernel
+          - proto:write-operation
         cmds:
             - buf lint
 
@@ -106,6 +127,8 @@ tasks:
         desc: Regenerate connect-go code from proto.
         deps:
           - proto:write-authz
+          - proto:write-kernel
+          - proto:write-operation
         cmds:
             - buf generate --template buf.gen.go.yaml
         sources:
@@ -119,6 +142,8 @@ tasks:
         desc: Regenerate connect-es code from proto.
         deps:
           - proto:write-authz
+          - proto:write-kernel
+          - proto:write-operation
         cmds:
             - buf generate --template buf.gen.es.yaml
         sources:

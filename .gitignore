@@ -41,3 +41,6 @@ node_modules/
 
 # Materialized by the protoc-gen-authz-go schema include task.
 /proto/authz
+
+/proto/tolo/kernel
+/proto/tolo/operation

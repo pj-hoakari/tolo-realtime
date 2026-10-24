@@ -8,6 +8,7 @@ import (
 	connectrpc "connectrpc.com/connect/v2"
 
 	"github.com/pj-hoakari/tolo-realtime/internal/domain"
+	"github.com/pj-hoakari/tolo-realtime/internal/tenantctx"
 )
 
 // errInternal is the only detail a client learns about an internal failure.
@@ -18,7 +19,10 @@ var clientErrors = []struct {
 	code    connectrpc.Code
 	message string
 }{
-	{domain.ErrGreetingNameRequired, connectrpc.CodeInvalidArgument, "name is required"},
+	{tenantctx.ErrUnauthenticated, connectrpc.CodeUnauthenticated, "event access is required"},
+	{tenantctx.ErrEventMismatch, connectrpc.CodePermissionDenied, "event_id does not match the event access"},
+	{domain.ErrInvalidDeliveryID, connectrpc.CodeInvalidArgument, "resume_after_delivery_id must be a delivery ID"},
+	{domain.ErrResumePointNotFound, connectrpc.CodeOutOfRange, "resume_after_delivery_id is not in the delivery log"},
 }
 
 func connectError(ctx context.Context, err error) *connectrpc.Error {

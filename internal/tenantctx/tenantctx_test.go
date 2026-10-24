@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 
@@ -12,52 +13,61 @@ import (
 	"github.com/pj-hoakari/tolo-realtime/internal/tenantctx"
 )
 
-// withTenant returns a context carrying verified claims that authenticate the
-// given tenant, as the transport interceptor would.
-func withTenant(ctx context.Context, tenantPublicID string) context.Context {
-	return internaljwt.ContextWithClaims(ctx, internaljwt.Claims{TenantPublicID: tenantPublicID})
-}
+var accessExpiresAt = time.Date(2026, 10, 24, 9, 10, 0, 0, time.UTC)
 
-// withSubject returns a context carrying verified claims that authenticate the
-// given subject but no tenant.
-func withSubject(ctx context.Context, subject string) context.Context {
-	return internaljwt.ContextWithClaims(ctx, internaljwt.Claims{
+func eventAccess(subject, eventID string) internaljwt.Claims {
+	return internaljwt.Claims{
 		RegisteredClaims: jwt.RegisteredClaims{Subject: subject},
-	})
+		TokenUse:         internaljwt.TokenUseEventAccess,
+		EventPublicID:    eventID,
+		SourceExpiresAt:  jwt.NewNumericDate(accessExpiresAt),
+	}
 }
 
-func TestSubjectFromContext(t *testing.T) {
+func TestEventCallerFor(t *testing.T) {
 	t.Parallel()
 
+	serviceClaims := eventAccess("tolo-operation", "event-1")
+	serviceClaims.TokenUse = internaljwt.TokenUseService
+
+	withoutSourceExpiry := eventAccess("user-1", "event-1")
+	withoutSourceExpiry.SourceExpiresAt = nil
+
 	tests := []struct {
-		name   string
-		ctx    context.Context
-		want   string
-		wantOK bool
+		name    string
+		ctx     context.Context
+		want    tenantctx.EventCaller
+		wantErr error
 	}{
 		{
-			name:   "verified subject",
-			ctx:    withSubject(context.Background(), "user-1"),
-			want:   "user-1",
-			wantOK: true,
+			name: "event access for the requested event",
+			ctx:  internaljwt.ContextWithClaims(context.Background(), eventAccess("user-1", "event-1")),
+			want: tenantctx.EventCaller{UserID: "user-1", AccessExpiresAt: accessExpiresAt},
 		},
 		{
-			name:   "no claims",
-			ctx:    context.Background(),
-			want:   "",
-			wantOK: false,
+			name:    "no claims",
+			ctx:     context.Background(),
+			wantErr: tenantctx.ErrUnauthenticated,
 		},
 		{
-			name:   "empty subject claim",
-			ctx:    withSubject(context.Background(), ""),
-			want:   "",
-			wantOK: false,
+			name:    "service token",
+			ctx:     internaljwt.ContextWithClaims(context.Background(), serviceClaims),
+			wantErr: tenantctx.ErrUnauthenticated,
 		},
 		{
-			name:   "blank subject claim",
-			ctx:    withSubject(context.Background(), "   "),
-			want:   "",
-			wantOK: false,
+			name:    "blank subject",
+			ctx:     internaljwt.ContextWithClaims(context.Background(), eventAccess("  ", "event-1")),
+			wantErr: tenantctx.ErrUnauthenticated,
+		},
+		{
+			name:    "no source token expiry",
+			ctx:     internaljwt.ContextWithClaims(context.Background(), withoutSourceExpiry),
+			wantErr: tenantctx.ErrUnauthenticated,
+		},
+		{
+			name:    "another event",
+			ctx:     internaljwt.ContextWithClaims(context.Background(), eventAccess("user-1", "event-2")),
+			wantErr: tenantctx.ErrEventMismatch,
 		},
 	}
 
@@ -65,158 +75,13 @@ func TestSubjectFromContext(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, ok := tenantctx.SubjectFromContext(tt.ctx)
-			if ok != tt.wantOK {
-				t.Errorf("SubjectFromContext() ok = %v, want %v", ok, tt.wantOK)
+			got, err := tenantctx.EventCallerFor(tt.ctx, "event-1")
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("EventCallerFor() error = %v, want %v", err, tt.wantErr)
 			}
 
 			if got != tt.want {
-				t.Errorf("SubjectFromContext() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestTenantPublicIDFromContext(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name   string
-		ctx    context.Context
-		want   string
-		wantOK bool
-	}{
-		{
-			name:   "verified tenant",
-			ctx:    withTenant(context.Background(), "tenant-public-id"),
-			want:   "tenant-public-id",
-			wantOK: true,
-		},
-		{
-			name:   "no claims",
-			ctx:    context.Background(),
-			want:   "",
-			wantOK: false,
-		},
-		{
-			name:   "empty tenant claim",
-			ctx:    withTenant(context.Background(), ""),
-			want:   "",
-			wantOK: false,
-		},
-		{
-			name:   "blank tenant claim",
-			ctx:    withTenant(context.Background(), "   "),
-			want:   "",
-			wantOK: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got, ok := tenantctx.TenantPublicIDFromContext(tt.ctx)
-			if ok != tt.wantOK {
-				t.Errorf("TenantPublicIDFromContext() ok = %v, want %v", ok, tt.wantOK)
-			}
-
-			if got != tt.want {
-				t.Errorf("TenantPublicIDFromContext() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestEnsure(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name           string
-		ctx            context.Context
-		tenantPublicID string
-		wantErr        error
-	}{
-		{
-			name:           "matches context tenant",
-			ctx:            withTenant(context.Background(), "tenant-public-id"),
-			tenantPublicID: "tenant-public-id",
-			wantErr:        nil,
-		},
-		{
-			name:           "differs from context tenant",
-			ctx:            withTenant(context.Background(), "tenant-public-id"),
-			tenantPublicID: "other-tenant-public-id",
-			wantErr:        tenantctx.ErrMismatch,
-		},
-		{
-			name:           "missing context tenant",
-			ctx:            context.Background(),
-			tenantPublicID: "tenant-public-id",
-			wantErr:        tenantctx.ErrMissing,
-		},
-		{
-			name:           "empty context tenant",
-			ctx:            withTenant(context.Background(), ""),
-			tenantPublicID: "tenant-public-id",
-			wantErr:        tenantctx.ErrMissing,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			err := tenantctx.Ensure(tt.ctx, tt.tenantPublicID)
-			if !errors.Is(err, tt.wantErr) {
-				t.Errorf("Ensure() error = %v, want %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestVerifyOwnership(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name           string
-		ctx            context.Context
-		tenantPublicID string
-		wantErr        error
-	}{
-		{
-			name:           "matches context tenant",
-			ctx:            withTenant(context.Background(), "tenant-public-id"),
-			tenantPublicID: "tenant-public-id",
-			wantErr:        nil,
-		},
-		{
-			name:           "differs from context tenant",
-			ctx:            withTenant(context.Background(), "tenant-public-id"),
-			tenantPublicID: "other-tenant-public-id",
-			wantErr:        tenantctx.ErrMismatch,
-		},
-		{
-			name:           "missing context tenant is unrestricted",
-			ctx:            context.Background(),
-			tenantPublicID: "tenant-public-id",
-			wantErr:        nil,
-		},
-		{
-			name:           "empty context tenant is unrestricted",
-			ctx:            withTenant(context.Background(), ""),
-			tenantPublicID: "tenant-public-id",
-			wantErr:        nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			err := tenantctx.VerifyOwnership(tt.ctx, tt.tenantPublicID)
-			if !errors.Is(err, tt.wantErr) {
-				t.Errorf("VerifyOwnership() error = %v, want %v", err, tt.wantErr)
+				t.Errorf("EventCallerFor() = %+v, want %+v", got, tt.want)
 			}
 		})
 	}

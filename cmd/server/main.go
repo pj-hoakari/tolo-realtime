@@ -11,10 +11,16 @@ import (
 	"syscall"
 	"time"
 
+	gcpfirestore "cloud.google.com/go/firestore"
+	firebase "firebase.google.com/go/v4"
+
 	"github.com/pj-hoakari/tolo-realtime/internal/application"
 	connectinfra "github.com/pj-hoakari/tolo-realtime/internal/infra/connect"
 	dbinfra "github.com/pj-hoakari/tolo-realtime/internal/infra/db"
+	"github.com/pj-hoakari/tolo-realtime/internal/infra/firebaseauth"
+	firestoreinfra "github.com/pj-hoakari/tolo-realtime/internal/infra/firestore"
 	"github.com/pj-hoakari/tolo-realtime/internal/infra/httpapi"
+	"github.com/pj-hoakari/tolo-realtime/internal/infra/push"
 	"github.com/pj-hoakari/tolo-realtime/internal/logging"
 	"github.com/pj-hoakari/tolo-realtime/internal/telemetry"
 )
@@ -57,6 +63,11 @@ func run() error {
 		return errors.New("DATABASE_URL is required")
 	}
 
+	firestoreProjectID := os.Getenv("FIRESTORE_PROJECT_ID")
+	if firestoreProjectID == "" {
+		return errors.New("FIRESTORE_PROJECT_ID is required")
+	}
+
 	shutdownTracing, err := telemetry.Setup(ctx)
 	if err != nil {
 		return fmt.Errorf("setup tracing: %w", err)
@@ -77,16 +88,52 @@ func run() error {
 		}
 	}()
 
-	greetService := application.NewGreetService(dbinfra.NewPostgresGreetingRepository(db))
+	firestoreClient, err := gcpfirestore.NewClient(ctx, firestoreProjectID)
+	if err != nil {
+		return fmt.Errorf("create firestore client: %w", err)
+	}
+	defer func() {
+		if err := firestoreClient.Close(); err != nil {
+			slog.Error("close firestore client failed", "error", err)
+		}
+	}()
 
-	greetRoutes, err := connectinfra.RoutesWithJWTSettings(greetService, jwtSettings)
+	slog.Info("firestore configured", "project", firestoreProjectID, "emulator_host", os.Getenv("FIRESTORE_EMULATOR_HOST"))
+
+	firebaseApp, err := firebase.NewApp(ctx, &firebase.Config{
+		AuthOverride:     nil,
+		DatabaseURL:      "",
+		ProjectID:        firestoreProjectID,
+		ServiceAccountID: "",
+		StorageBucket:    "",
+	})
+	if err != nil {
+		return fmt.Errorf("create firebase app: %w", err)
+	}
+
+	authClient, err := firebaseApp.Auth(ctx)
+	if err != nil {
+		return fmt.Errorf("create firebase auth client: %w", err)
+	}
+
+	slog.Info("firebase auth configured", "project", firestoreProjectID, "emulator_host", os.Getenv("FIREBASE_AUTH_EMULATOR_HOST"))
+
+	deliveryLog := dbinfra.NewPostgresDeliveryLog(db)
+	intake := application.NewDeliveryIntakeService(deliveryLog, firestoreinfra.NewLatestDeliveryNotifier(firestoreClient))
+
+	fetchRoutes, err := connectinfra.RoutesWithJWTSettings(
+		application.NewDeliveryFetchService(deliveryLog),
+		application.NewFirestoreTokenService(firebaseauth.NewTokenMinter(authClient)),
+		jwtSettings,
+	)
 	if err != nil {
 		return fmt.Errorf("build handler: %w", err)
 	}
 
 	handler := httpapi.NewHandler(
 		httpapi.HealthRoutes(httpapi.ReadinessCheck{Name: "database", Check: db.PingContext}),
-		greetRoutes,
+		fetchRoutes,
+		push.Routes(intake),
 	)
 
 	httpServer := &http.Server{

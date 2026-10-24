@@ -19,6 +19,21 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go build -trimpath -ldflags='-s -w' -o /out/server ./cmd/server
 
 
+FROM golang:1.27-alpine@sha256:d530cf60723abf1ffae0cd16bb546b379ec0550d2f3815e5b16ed69dbc00fba4 AS e2e
+
+WORKDIR /src
+
+ENV CGO_ENABLED=0
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY gen ./gen
+COPY e2e ./e2e
+
+ENTRYPOINT ["go", "test", "-tags", "e2e", "-count=1", "-v", "./e2e/..."]
+
+
 FROM migrate/migrate:v4.20.1@sha256:76cc2074cb6642631f34a898ced71e6aeaa6b1a4d78c4daa743275a22e0c5be7 AS migrate
 
 COPY migrations /migrations

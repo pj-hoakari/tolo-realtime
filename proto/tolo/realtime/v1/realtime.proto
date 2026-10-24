@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package tolo.realtime.v1;
+
+import "authz/v1/options.proto";
+import "google/protobuf/timestamp.proto";
+import "tolo/operation/v1/operation.proto";
+
+service RealtimeFetchService {
+  rpc FetchDeliveries(FetchDeliveriesRequest) returns (FetchDeliveriesResponse) {
+    option (authz.v1.auth_policy) = {
+      level: AUTH_LEVEL_AUTHENTICATED
+      required_scopes: "events.read"
+      token_uses: "event_access"
+    };
+  }
+  rpc IssueFirestoreToken(IssueFirestoreTokenRequest) returns (IssueFirestoreTokenResponse) {
+    option (authz.v1.auth_policy) = {
+      level: AUTH_LEVEL_AUTHENTICATED
+      required_scopes: "events.read"
+      token_uses: "event_access"
+    };
+  }
+}
+
+message IssueFirestoreTokenRequest {
+  string event_id = 1;
+}
+message IssueFirestoreTokenResponse {
+  string firebase_custom_token = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+message FetchDeliveriesRequest {
+  string event_id = 1;
+  optional string resume_after_delivery_id = 2;
+  optional uint32 long_poll_timeout_seconds = 3;
+}
+message FetchDeliveriesResponse {
+  repeated Envelope envelopes = 1;
+  string latest_delivery_id = 2;
+}
+
+message Envelope {
+  string delivery_id = 1;
+  google.protobuf.Timestamp sent_at = 2;
+  tolo.operation.v1.DeliveryPayload payload = 3;
+}

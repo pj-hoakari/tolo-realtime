@@ -1,8 +1,11 @@
-CREATE TABLE greetings (
-    id BIGSERIAL PRIMARY KEY,
-    tenant_public_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+CREATE TABLE deliveries (
+    seq BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    delivery_id UUID NOT NULL UNIQUE,
+    event_id TEXT NOT NULL,
+    recipient_user_ids TEXT[] NOT NULL,
+    payload BYTEA NOT NULL,
+    sent_at TIMESTAMPTZ NOT NULL,
+    received_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX greetings_tenant_public_id_idx ON greetings (tenant_public_id);
+CREATE INDEX deliveries_event_id_seq_idx ON deliveries (event_id, seq);
