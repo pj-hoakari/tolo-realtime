@@ -50,7 +50,7 @@ task up:build
 ```
 
 サーバーは `http://localhost:8080`、PostgreSQL は `localhost:5432` で待ち受ける（停止は `task down`）  
-Firebase のエミュレータは、Edge Bridge Service と共有するものを tolo-edge-bridge の `firebase-emulator/` からコミットを固定してビルドする。ホストへは Firestore を `localhost:8081`、Firebase Auth を `localhost:9099`、Emulator UI を `http://localhost:4000` で公開する  
+Firebase のエミュレータはこのリポジトリの `firebase-emulator/` からビルドする。`firestore.rules` には Realtime の最終更新 ID 文書（`deliveryNotifications/{eventId}`）のルールだけを置く。ホストへは Firestore を `localhost:8081`、Firebase Auth を `localhost:9099`、Emulator UI を `http://localhost:4000` で公開する  
 Compose の `migrate` サービスは `Dockerfile` の `migrate` ターゲットをビルドして起動するため、`migrations/` を追加・変更したあとは `--build` 付き（`docker compose up --build` または `task up:build`）で起動し直す  
 `task up` はイメージを再ビルドしないので、古いマイグレーションのままになる  
 RPC を呼び出すには Service Gateway 発行の内部 JWT が必要なので、`go tool jwtgen` で生成した JWKS を配信する URL を `INTERNAL_JWKS_URL` で `server` に渡す（「内部 JWT」を参照）
