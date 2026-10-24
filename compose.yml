@@ -31,7 +31,7 @@ services:
 
     firebase-emulator:
         build:
-            context: https://github.com/pj-hoakari/tolo-edge-bridge.git#3063bd931d6f9e49aa5cbf8be61f788a5856cbb8:firebase-emulator
+            context: ./firebase-emulator
         ports:
             - "8081:8080"
             - "9099:9099"
