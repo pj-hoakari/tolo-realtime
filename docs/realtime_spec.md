@@ -73,13 +73,21 @@ message Envelope {
 - FetchDeliveries を含む本サービスの RPC は、他サービス同様 Service Gateway 経由で提供する（明示した例外を除き Service Gateway を必ず経由する方針。context_map 等の「GW経由」表記と対応）
 - Firestore はマネージドサービスの変更通知チャネルである（順応者に準じる外部依存）
   文書はイベント単位で最終更新IDのみを持つ。文書の粒度（イベント単位／ユーザ単位）の最適化は実装フェーズで検証する
+  文書のパスは `deliveryNotifications/{event_id}`、フィールドは `latestDeliveryId`（文字列）とする。`DeliveryOrder` はテナントを持たないので、パスにテナントを含めない
+  `latestDeliveryId` は、そのイベントで最後に配信ログへ届いた配信の `delivery_id` である。再配信を受けたときも、配信ログの最後の配信で書き直す。Firestore への書き込みに失敗した push は一時的な失敗とし、再配信で書き直す
 - 配信ログは読み取りモデル（複製）であり、正本は Operation・観測側の永続化にある
   保持期間はテナント設定値とし、既定値は実装フェーズで検証する。超過時は全量再取得（参照系 API）へフォールバックする
-- `realtime-delivery` は HTTP の push で受ける。受け口の形と応答の規約は service_transport.md の「情報更新 push の受け口」に従う
+- `realtime-delivery` は HTTP の push で `POST /push/realtime-delivery` に受ける。受け口の形と応答の規約は service_transport.md の「情報更新 push の受け口」に従う
+  本サービスの受け口が恒久的な失敗として扱うのは、ペイロードを復号できない場合だけである。`delivery_id` が UUIDv7 でない、`event_id` が空、宛先がない、`payload` がない `DeliveryOrder` も、復号できないものとして扱う。本サービスはイベントの存在を知らないので、対象のイベントが存在しないことでは失敗としない
 - 配信の再試行はブローカーに委譲する（at-least-once）。Operation が再試行するのは publish 失敗時だけである
   恒久的な失敗（復号できない、など）として受け取り済みにした配信は、上流から取り直す経路がなく、開いているスタッフアプリに届かない（ADR-0108）
   再配信による重複は delivery_id で排除する
 - 取りこぼしは `resume_after_delivery_id` で回復する。ログ保持期間を超えた再開は全量再取得（参照系 API）にフォールバックする
+  配信ログの順序は、本サービスに届いた順とする。UUIDv7 の `delivery_id` は Operation が採番した時刻の順で、届く順と食い違うことがあるので、順序には使わない
+  FetchDeliveries は、`resume_after_delivery_id` の配信より後に届いた配信を、届いた順に最大 100 件返す。`resume_after_delivery_id` が未指定なら、呼び出し元が宛先に含まれる直近の 100 件を届いた順に返す
+  `latest_delivery_id` は、次の呼び出しで `resume_after_delivery_id` に渡す値である。100 件で打ち切ったときは返した最後の配信、そうでなければそのイベントで最後に届いた配信（宛先を問わない）の `delivery_id` を返す。配信がひとつもなければ空文字を返す
+  `resume_after_delivery_id` がそのイベントの配信ログにないときは `OUT_OF_RANGE` を返す。スタッフアプリは全量再取得にフォールバックする
+  `long_poll_timeout_seconds` を指定し、返す配信がないときは、配信が届くか指定の秒数（上限 30 秒）が過ぎるまで待つ
 - 配信対象の選別（誰が開いているか）は Operation の接続状態にもとづく。本サービスは依頼された宛先分をログに残し、fetch 時に呼び出し元の宛先分に絞る
 - Firestore のアクセス制御はカスタムトークン方式とする
   スタッフアプリは IssueFirestoreToken で得たカスタムトークンで Firebase Auth にサインインし、リスナーを張る
@@ -102,4 +110,6 @@ message Envelope {
 - レスポンスの `expires_at` はクレームの `expires_at` と同じ時刻を指す。スタッフアプリは、この時刻の前に新しい `event_access` でカスタムトークンを取り直し、サインインし直す
 - セキュリティルールは、クレームの `event_id` が文書パスと一致すること、`token_use` が `delivery_notification` であること、`request.time` が `expires_at` より前であることを条件に、該当イベントの最終更新 ID 文書の読み取りだけを許す。書き込めるのは本サービス（Admin SDK）だけである
 - `token_use` を照合するので、Edge Bridge Service のカスタムトークン（`event_id` を持つ）では最終更新 ID 文書を読めない
-- uid、最終更新 ID 文書のパス、`tenant_id` を照合するかどうかは実装フェーズで決める
+- `expires_at` は、内部 JWT の `src_exp`（Service Gateway が `event_access` の `exp` を写したもの）から取る。内部 JWT の `exp` は `event_access` の `exp` より早く切れるので使わない（ADR-0109）
+- uid は内部 JWT の `sub`（スタッフの user_id）とする
+- 最終更新 ID 文書のパスは `deliveryNotifications/{event_id}` とする。`tenant_id` はクレームに載せず、照合しない。`event_id` はテナントをまたいで重ならない公開 ID であり、`DeliveryOrder` がテナントを持たないためである
