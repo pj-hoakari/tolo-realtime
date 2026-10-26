@@ -51,14 +51,23 @@ services:
             FIRESTORE_PROJECT_ID: demo-tolo
             FIRESTORE_EMULATOR_HOST: firebase-emulator:8080
             FIREBASE_AUTH_EMULATOR_HOST: firebase-emulator:9099
-            INTERNAL_JWKS_URL: ${INTERNAL_JWKS_URL:-http://gateway:8080/.well-known/jwks.json}
+            INTERNAL_JWKS_URL: ${INTERNAL_JWKS_URL:-http://mockdeps:8080/.well-known/jwks.json}
         depends_on:
             migrate:
                 condition: service_completed_successfully
             firebase-emulator:
                 condition: service_healthy
+            mockdeps:
+                condition: service_started
         ports:
             - "8080:8080"
+
+    mockdeps:
+        build:
+            context: .
+            target: mockdeps
+        ports:
+            - "8089:8080"
 
     e2e:
         profiles: [e2e]

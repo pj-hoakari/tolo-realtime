@@ -137,6 +137,35 @@ func TestRealtime(t *testing.T) {
 		}
 	})
 
+	t.Run("gRPC のクライアントは TLS なしの HTTP/2 で直接つなぎ、配信を取得できる", func(t *testing.T) {
+		t.Parallel()
+
+		event := newEventID()
+		order := newOrder(event, "user-1")
+
+		if status := pushOrder(t, marshal(t, order)); status != http.StatusNoContent {
+			t.Fatalf("push status = %d, want 204", status)
+		}
+
+		protocols := new(http.Protocols)
+		protocols.SetUnencryptedHTTP2(true)
+
+		grpcClient := realtimev1connect.NewRealtimeFetchServiceClient(connectrpc.NewClient(connecthttp.NewTransport(
+			&http.Client{Transport: &http.Transport{Protocols: protocols}},
+			serverURL,
+			connecthttp.WithGRPC(),
+		)))
+
+		res, err := grpcClient.FetchDeliveries(authorized(t, event, "user-1"), &realtimev1.FetchDeliveriesRequest{EventId: event})
+		if err != nil {
+			t.Fatalf("FetchDeliveries() over gRPC error = %v", err)
+		}
+
+		if len(res.GetEnvelopes()) != 1 || res.GetEnvelopes()[0].GetDeliveryId() != order.GetDeliveryId() {
+			t.Errorf("envelopes = %v, want only %s", res.GetEnvelopes(), order.GetDeliveryId())
+		}
+	})
+
 	t.Run("配信ログにない resume_after_delivery_id は out_of_range になる", func(t *testing.T) {
 		t.Parallel()
 

@@ -136,10 +136,15 @@ func run() error {
 		push.Routes(intake),
 	)
 
+	protocols := new(http.Protocols)
+	protocols.SetHTTP1(true)
+	protocols.SetUnencryptedHTTP2(true)
+
 	httpServer := &http.Server{
 		Addr:              addr,
 		Handler:           handler,
 		ReadHeaderTimeout: readHeaderTimeout,
+		Protocols:         protocols,
 		// net/http reports its own failures (a broken connection, a panic in a
 		// handler) through this logger, so it goes to the same structured
 		// stream as everything else.
