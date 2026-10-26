@@ -44,3 +44,5 @@ node_modules/
 
 /proto/tolo/kernel
 /proto/tolo/operation
+
+/build/
