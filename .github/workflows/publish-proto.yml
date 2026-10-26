@@ -33,7 +33,7 @@ jobs:
               with:
                   install_args: go buf task
 
-            - name: Export proto with its imports
+            - name: Export proto
               run: task proto:export
 
             - name: Push proto artifact
@@ -42,3 +42,11 @@ jobs:
                   version: ${{ steps.version.outputs.version }}
                   tags: ${{ steps.version.outputs.tags }}
                   proto-dir: build/proto
+
+            - name: Push proto bundle artifact
+              uses: pj-hoakari/actions/publish-proto@92b346752a66ad19a36fbc929191603f72e00fe9 # v20261020.0.2
+              with:
+                  version: ${{ steps.version.outputs.version }}
+                  tags: ${{ steps.version.outputs.tags }}
+                  artifact: ghcr.io/${{ github.repository }}-proto-bundle
+                  proto-dir: build/proto-bundle

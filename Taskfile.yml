@@ -125,14 +125,15 @@ tasks:
             - buf lint
 
     proto:export:
-        desc: Export the realtime proto with every proto it imports into build/proto.
+        desc: Export the realtime proto alone into build/proto and with every proto it imports into build/proto-bundle.
         deps:
           - proto:write-authz
           - proto:write-kernel
           - proto:write-operation
         cmds:
-            - rm -rf build/proto
-            - buf export proto --path proto/tolo/realtime/v1 -o build/proto
+            - rm -rf build/proto build/proto-bundle
+            - buf export proto --path proto/tolo/realtime/v1 --exclude-imports -o build/proto
+            - buf export proto --path proto/tolo/realtime/v1 -o build/proto-bundle
 
     proto:gen:go:
         desc: Regenerate connect-go code from proto.

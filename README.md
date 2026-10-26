@@ -141,7 +141,7 @@ go tool jwtgen -audience tolo-realtime -token-use event_access -tenant-public-id
 ### クライアントからの接続
 
 サーバーは Connect と gRPC を同じポートで受ける。gRPC は TLS なしの HTTP/2（h2c）で受けるので、開発中のクライアントは `http://localhost:8080` へ gRPC で直接つなげる  
-次の例は、公開している proto（「proto アーティファクトの利用」を参照）を `proto` に展開し、`buf curl` で gRPC として呼び出す
+次の例は、import する proto まで含めたアーティファクト（「proto アーティファクトの利用」を参照）を `proto` に展開し、`buf curl` で gRPC として呼び出す
 
 ```bash
 buf curl --schema proto --protocol grpc --http2-prior-knowledge \
@@ -203,11 +203,15 @@ golang-migrate CLI は接続先を環境変数からは読まないため、`-da
 ## proto アーティファクトの利用
 
 `.proto` は [ORAS](https://oras.land) で OCI アーティファクト化され、GitHub Container Registry に公開される  
-アーティファクト名: `ghcr.io/<owner>/<repo>-proto`
+アーティファクトは 2 つあり、同じバージョンタグで公開する
 
-アーティファクトには `tolo/realtime/v1/realtime.proto` と、それが import する proto（`tolo/operation/v1/operation.proto`、`tolo/kernel/v1/kernel.proto`、`authz/v1/options.proto`）をすべて含める  
-このアーティファクトだけで `buf` や `protoc` の入力がそろうので、Go を使わない言語のクライアントもそのまま生成に使える  
-公開する内容は `task proto:export` で `build/proto` に書き出したものと同じである
+| アーティファクト名 | 中身 | `task proto:export` の書き出し先 |
+| --- | --- | --- |
+| `ghcr.io/<owner>/<repo>-proto` | `tolo/realtime/v1/realtime.proto` だけ | `build/proto` |
+| `ghcr.io/<owner>/<repo>-proto-bundle` | `tolo/realtime/v1/realtime.proto` と、それが import する proto（`tolo/operation/v1/operation.proto`、`tolo/kernel/v1/kernel.proto`、`authz/v1/options.proto`）をすべて | `build/proto-bundle` |
+
+`-proto` だけでは import を解決できないので、`buf` や `protoc` の入力にするには operation、kernel、authz の proto を別に用意する  
+`-proto-bundle` はそれだけで入力がそろうので、Go を使わない言語のクライアントもそのまま生成に使える
 
 ### 取得（pull）
 
@@ -216,6 +220,6 @@ golang-migrate CLI は接続先を環境変数からは読まないため、`-da
 ```bash
 # 出力先ディレクトリに proto を展開（ディレクトリ構造が復元される）
 oras pull ghcr.io/<owner>/<repo>-proto:latest -o proto
+# import する proto まで含めて展開する
+oras pull ghcr.io/<owner>/<repo>-proto-bundle:latest -o proto
 ```
-
-取得した `.proto` は `buf` や `protoc` の入力としてそのまま利用できる
