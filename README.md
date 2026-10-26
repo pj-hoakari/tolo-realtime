@@ -49,11 +49,11 @@ docker compose up --build
 task up:build
 ```
 
-サーバーは `http://localhost:8080`、PostgreSQL は `localhost:5432` で待ち受ける（停止は `task down`）  
+サーバーは `http://localhost:8080`、PostgreSQL は `localhost:5432`、`mockdeps` は `http://localhost:8089` で待ち受ける（停止は `task down`）  
 Firebase のエミュレータはこのリポジトリの `firebase-emulator/` からビルドする。`firestore.rules` には Realtime の最終更新 ID 文書（`deliveryNotifications/{eventId}`）のルールだけを置く。ホストへは Firestore を `localhost:8081`、Firebase Auth を `localhost:9099`、Emulator UI を `http://localhost:4000` で公開する  
 Compose の `migrate` サービスは `Dockerfile` の `migrate` ターゲットをビルドして起動するため、`migrations/` を追加・変更したあとは `--build` 付き（`docker compose up --build` または `task up:build`）で起動し直す  
 `task up` はイメージを再ビルドしないので、古いマイグレーションのままになる  
-RPC を呼び出すには Service Gateway 発行の内部 JWT が必要なので、`go tool jwtgen` で生成した JWKS を配信する URL を `INTERNAL_JWKS_URL` で `server` に渡す（「内部 JWT」を参照）
+RPC を呼び出すには Service Gateway 発行の内部 JWT が必要である。Compose では `mockdeps` が Service Gateway の代わりに JWKS を配信し、トークンを発行する（「内部 JWT」を参照）
 
 ### 環境変数
 
@@ -63,7 +63,7 @@ RPC を呼び出すには Service Gateway 発行の内部 JWT が必要なので
 | `DATABASE_URL` | なし（必須） | PostgreSQL の接続先 |
 | `FIRESTORE_PROJECT_ID` | なし（必須） | 最終更新 ID 文書を書く Firestore と、カスタムトークンを発行する Firebase Auth のプロジェクト |
 | `FIRESTORE_EMULATOR_HOST` / `FIREBASE_AUTH_EMULATOR_HOST` | なし | 設定すると Firestore と Firebase Auth のエミュレータに接続する。Compose では `firebase-emulator:8080` と `firebase-emulator:9099` |
-| `INTERNAL_JWKS_URL` | `http://gateway:8080/.well-known/jwks.json` | 内部 JWT の検証に使う JWKS の取得先 |
+| `INTERNAL_JWKS_URL` | `http://gateway:8080/.well-known/jwks.json` | 内部 JWT の検証に使う JWKS の取得先（Compose では `mockdeps` の `http://mockdeps:8080/.well-known/jwks.json`） |
 | `INTERNAL_JWT_ISSUER` | `service-gateway` | 内部 JWT に期待する `iss` |
 | `INTERNAL_JWT_AUDIENCE` | `tolo-realtime` | 内部 JWT に期待する `aud` |
 | `LOG_LEVEL` | `info` | ログに出力する最小レベル。`debug`／`info`／`warn`（`warning` も同義）／`error`／`critical` を取り、未知の値ならサーバーは起動しない |
@@ -114,21 +114,50 @@ Jaeger UI は `http://localhost:16686`（停止は `task down:o11y`）
 
 ### 内部 JWT
 
-ローカルでの動作確認には `internal-jwt-handling` 同梱の jwtgen CLI でトークンと JWKS を生成する  
-`go.mod` の `tool` に登録してあるので `go tool jwtgen` で実行できる
+RPC を呼び出すには Service Gateway 発行の内部 JWT が必要である  
+Compose で起動した場合は、`mockdeps` の `POST /token` でトークンを発行する。`server` は `mockdeps` の JWKS で検証するので、Service Gateway を経由せずに `Authorization: Bearer <token>` で呼び出せる  
+発行も検証も HTTP だけで済むので、Go 以外の言語のクライアントからも使える
 
 ```bash
-# ES256 の内部 JWT と対応する JWKS ドキュメントを JSON で出力
-go tool jwtgen -audience tolo-realtime -tenant-public-id 0123456789abcdef -scope <scope> -ttl 10m
+TOKEN=$(curl -s -X POST localhost:8089/token \
+  -d '{"tenant_id":"0123456789abcdef","event_id":"fedcba9876543210","subject":"staff-user-1"}' \
+  | jq -r .token)
 ```
 
-- `-token-use` は `tenant_access`（既定）、`event_access`、`registration`、`service` を取る
-- `tenant_access` では `-tenant-public-id`（ランダムな 16 文字 hex）と `-scope` が必須である。必要な scope は proto の `required_scopes` で宣言されている
-- `-issuer` の既定は `service-gateway`、`-audience` に既定はないので `tolo-realtime` を明示する
-- そのほかのフラグは `-event-public-id`、`-origin-sub`、`-subject`、`-txn`、`-kid`（既定 `test-key`）、`-ttl`（既定 2 分）である
+- 入力の JSON は `audience`（既定 `tolo-realtime`）、`token_use`（既定 `event_access`）、`tenant_id`、`event_id`、`subject`、`scope`（空白区切り、既定 `events.read`）、`ttl`（Go の duration 形式、既定 `10m`）を取る
+- 本サービスの RPC は `event_access` と `events.read` を要求する。`tenant_id` と `event_id`（どちらも 16 文字 hex）は必須である
+- `subject` はトークンの `sub` で、本サービスはこれをスタッフの user_id として扱う。配信は `recipient_user_ids` にこの値を含むものだけが返る
+- `iss` は `service-gateway` に固定される
+- 応答は `token` / `claims` / `jwks` を持つ JSON である
+- 鍵は `mockdeps` を起動するたびに作り直されるので、再起動の後はトークンを発行し直す
 
-出力は `token` / `claims` / `jwks` を持つ JSON である  
-`jwks` を任意の HTTP エンドポイント（例: ローカルのファイルサーバ）で配信し、`INTERNAL_JWKS_URL` にその URL を設定すると、`Authorization: Bearer <token>` で呼び出せる
+Compose を使わずにトークンを作る場合は、`internal-jwt-handling` 同梱の jwtgen CLI を `go tool jwtgen` で実行する（`go.mod` の `tool` に登録してある）  
+出力の `jwks` を任意の HTTP エンドポイントで配信し、`INTERNAL_JWKS_URL` にその URL を設定する
+
+```bash
+go tool jwtgen -audience tolo-realtime -token-use event_access -tenant-public-id 0123456789abcdef -event-public-id fedcba9876543210 -subject staff-user-1 -scope events.read -ttl 10m
+```
+
+### クライアントからの接続
+
+サーバーは Connect と gRPC を同じポートで受ける。gRPC は TLS なしの HTTP/2（h2c）で受けるので、開発中のクライアントは `http://localhost:8080` へ gRPC で直接つなげる  
+次の例は、公開している proto（「proto アーティファクトの利用」を参照）を `proto` に展開し、`buf curl` で gRPC として呼び出す
+
+```bash
+buf curl --schema proto --protocol grpc --http2-prior-knowledge \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"event_id":"fedcba9876543210"}' \
+  http://localhost:8080/tolo.realtime.v1.RealtimeFetchService/FetchDeliveries
+```
+
+配信ログが空のうちは `FetchDeliveries` が何も返さない。`POST /push/realtime-delivery` に `DeliveryOrder` を送ると、テスト用の配信を入れられる  
+`delivery_id` は UUIDv7 でなければならない。`/push/realtime-delivery` は復号できない本文も 204 で受け取って捨てるので、入らないときは `server` のログを確かめる
+
+```bash
+echo '{"delivery_id":"019a1f00-0000-7000-8000-000000000001","event_id":"fedcba9876543210","recipient_user_ids":["staff-user-1"],"payload":{"staff_message":{"body":"hello"}}}' \
+  | buf convert proto --type tolo.operation.v1.DeliveryOrder --from -#format=json --to -#format=binpb \
+  | curl --data-binary @- localhost:8080/push/realtime-delivery
+```
 
 ### connect-es の生成
 
@@ -175,6 +204,10 @@ golang-migrate CLI は接続先を環境変数からは読まないため、`-da
 
 `.proto` は [ORAS](https://oras.land) で OCI アーティファクト化され、GitHub Container Registry に公開される  
 アーティファクト名: `ghcr.io/<owner>/<repo>-proto`
+
+アーティファクトには `tolo/realtime/v1/realtime.proto` と、それが import する proto（`tolo/operation/v1/operation.proto`、`tolo/kernel/v1/kernel.proto`、`authz/v1/options.proto`）をすべて含める  
+このアーティファクトだけで `buf` や `protoc` の入力がそろうので、Go を使わない言語のクライアントもそのまま生成に使える  
+公開する内容は `task proto:export` で `build/proto` に書き出したものと同じである
 
 ### 取得（pull）
 
