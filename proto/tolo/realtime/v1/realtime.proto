@@ -4,7 +4,6 @@ package tolo.realtime.v1;
 
 import "authz/v1/options.proto";
 import "google/protobuf/timestamp.proto";
-import "tolo/operation/v1/operation.proto";
 
 service RealtimeFetchService {
   rpc FetchDeliveries(FetchDeliveriesRequest) returns (FetchDeliveriesResponse) {
@@ -44,5 +43,5 @@ message FetchDeliveriesResponse {
 message Envelope {
   string delivery_id = 1;
   google.protobuf.Timestamp sent_at = 2;
-  tolo.operation.v1.DeliveryPayload payload = 3;
+  bytes payload = 3;
 }

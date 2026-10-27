@@ -6,7 +6,6 @@ tool (
 	connectrpc.com/connect/v2/cmd/protoc-gen-connect-go
 	github.com/pj-hoakari/internal-jwt-handling/cmd/jwtgen
 	github.com/pj-hoakari/protoc-gen-authz-go/cmd/protoc-gen-authz-go
-	github.com/pj-hoakari/tolo-kernel-proto/cmd/tolo-kernel-proto
 	go.uber.org/mock/mockgen
 	google.golang.org/protobuf/cmd/protoc-gen-go
 )

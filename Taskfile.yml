@@ -103,44 +103,17 @@ tasks:
         cmds:
           - go tool protoc-gen-authz-go --write-proto proto
 
-    proto:write-kernel:
-        desc: Write kernel proto to proto directory.
-        cmds:
-          - go tool tolo-kernel-proto --write-proto proto
-
-    proto:write-operation:
-        desc: Write operation proto from the tolo-operation module to proto directory.
-        cmds:
-          - go mod download github.com/pj-hoakari/tolo-operation
-          - mkdir -p proto/tolo/operation/v1
-          - install -m 644 "$(go list -m -f '{{"{{.Dir}}"}}' github.com/pj-hoakari/tolo-operation)/proto/tolo/operation/v1/operation.proto" proto/tolo/operation/v1/
-
     proto:lint:
         desc: Lint proto.
         deps:
           - proto:write-authz
-          - proto:write-kernel
-          - proto:write-operation
         cmds:
             - buf lint
-
-    proto:export:
-        desc: Export the realtime proto alone into build/proto and with every proto it imports into build/proto-bundle.
-        deps:
-          - proto:write-authz
-          - proto:write-kernel
-          - proto:write-operation
-        cmds:
-            - rm -rf build/proto build/proto-bundle
-            - buf export proto --path proto/tolo/realtime/v1 --exclude-imports -o build/proto
-            - buf export proto --path proto/tolo/realtime/v1 -o build/proto-bundle
 
     proto:gen:go:
         desc: Regenerate connect-go code from proto.
         deps:
           - proto:write-authz
-          - proto:write-kernel
-          - proto:write-operation
         cmds:
             - buf generate --template buf.gen.go.yaml
         sources:
@@ -154,8 +127,6 @@ tasks:
         desc: Regenerate connect-es code from proto.
         deps:
           - proto:write-authz
-          - proto:write-kernel
-          - proto:write-operation
         cmds:
             - buf generate --template buf.gen.es.yaml
         sources:

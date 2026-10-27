@@ -9,9 +9,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	"google.golang.org/protobuf/proto"
 
-	operationv1 "github.com/pj-hoakari/tolo-operation/gen/tolo/operation/v1"
 	"github.com/pj-hoakari/tolo-realtime/internal/domain"
 	"github.com/pj-hoakari/tolo-realtime/internal/repository"
 )
@@ -25,16 +23,11 @@ func NewPostgresDeliveryLog(db *sqlx.DB) *PostgresDeliveryLog {
 }
 
 func (l *PostgresDeliveryLog) Append(ctx context.Context, delivery domain.Delivery) error {
-	payload, err := proto.Marshal(delivery.Payload)
-	if err != nil {
-		return fmt.Errorf("marshal delivery payload: %w", err)
-	}
-
-	_, err = Executor(ctx, l.db).ExecContext(ctx, `
+	_, err := Executor(ctx, l.db).ExecContext(ctx, `
 		INSERT INTO deliveries (delivery_id, event_id, recipient_user_ids, payload, sent_at)
 		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (delivery_id) DO NOTHING`,
-		string(delivery.ID), delivery.EventID, delivery.Recipients, payload, delivery.SentAt)
+		string(delivery.ID), delivery.EventID, delivery.Recipients, delivery.Payload, delivery.SentAt)
 	if err != nil {
 		return fmt.Errorf("insert delivery: %w", err)
 	}
@@ -148,16 +141,11 @@ func (l *PostgresDeliveryLog) list(ctx context.Context, query string, args ...an
 	deliveries := make([]domain.Delivery, 0, len(rows))
 
 	for _, row := range rows {
-		payload := new(operationv1.DeliveryPayload)
-		if err := proto.Unmarshal(row.Payload, payload); err != nil {
-			return nil, fmt.Errorf("unmarshal delivery %s payload: %w", row.DeliveryID, err)
-		}
-
 		deliveries = append(deliveries, domain.Delivery{
 			ID:         domain.DeliveryID(row.DeliveryID),
 			EventID:    row.EventID,
 			Recipients: nil,
-			Payload:    payload,
+			Payload:    row.Payload,
 			SentAt:     row.SentAt.UTC(),
 		})
 	}

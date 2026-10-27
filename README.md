@@ -141,7 +141,8 @@ go tool jwtgen -audience tolo-realtime -token-use event_access -tenant-public-id
 ### クライアントからの接続
 
 サーバーは Connect と gRPC を同じポートで受ける。gRPC は TLS なしの HTTP/2（h2c）で受けるので、開発中のクライアントは `http://localhost:8080` へ gRPC で直接つなげる  
-次の例は、import する proto まで含めたアーティファクト（「proto アーティファクトの利用」を参照）を `proto` に展開し、`buf curl` で gRPC として呼び出す
+次の例は、Realtime と authz の proto（「proto アーティファクトの利用」を参照）を `proto` に展開し、`buf curl` で gRPC として呼び出す  
+応答の `payload` は `tolo.operation.v1.DeliveryPayload` をエンコードしたバイト列なので、JSON では base64 の文字列になる
 
 ```bash
 buf curl --schema proto --protocol grpc --http2-prior-knowledge \
@@ -151,6 +152,7 @@ buf curl --schema proto --protocol grpc --http2-prior-knowledge \
 ```
 
 配信ログが空のうちは `FetchDeliveries` が何も返さない。`POST /push/realtime-delivery` に `DeliveryOrder` を送ると、テスト用の配信を入れられる  
+`DeliveryOrder` は Operation の型なので、次の例では Operation と kernel の proto も `proto` に展開しておく  
 `delivery_id` は UUIDv7 でなければならない。`/push/realtime-delivery` は復号できない本文も 204 で受け取って捨てるので、入らないときは `server` のログを確かめる
 
 ```bash
@@ -203,15 +205,18 @@ golang-migrate CLI は接続先を環境変数からは読まないため、`-da
 ## proto アーティファクトの利用
 
 `.proto` は [ORAS](https://oras.land) で OCI アーティファクト化され、GitHub Container Registry に公開される  
-アーティファクトは 2 つあり、同じバージョンタグで公開する
+アーティファクト名: `ghcr.io/<owner>/<repo>-proto`  
+中身は `tolo/realtime/v1/realtime.proto` だけである
 
-| アーティファクト名 | 中身 | `task proto:export` の書き出し先 |
-| --- | --- | --- |
-| `ghcr.io/<owner>/<repo>-proto` | `tolo/realtime/v1/realtime.proto` だけ | `build/proto` |
-| `ghcr.io/<owner>/<repo>-proto-bundle` | `tolo/realtime/v1/realtime.proto` と、それが import する proto（`tolo/operation/v1/operation.proto`、`tolo/kernel/v1/kernel.proto`、`authz/v1/options.proto`）をすべて | `build/proto-bundle` |
+`realtime.proto` は `authz/v1/options.proto` を import するので、`buf` や `protoc` の入力にするには authz の proto も同じディレクトリに展開する  
+`Envelope.payload` は Operation の `tolo.operation.v1.DeliveryPayload` をエンコードしたバイト列である。復号に使う型は Operation の proto から生成する。Operation の proto は `kernel.proto` を import するので、kernel の proto も展開する
 
-`-proto` だけでは import を解決できないので、`buf` や `protoc` の入力にするには operation、kernel、authz の proto を別に用意する  
-`-proto-bundle` はそれだけで入力がそろうので、Go を使わない言語のクライアントもそのまま生成に使える
+| proto | アーティファクト |
+| --- | --- |
+| `tolo/realtime/v1/realtime.proto` | `ghcr.io/pj-hoakari/tolo-realtime-proto` |
+| `authz/v1/options.proto` | `ghcr.io/pj-hoakari/protoc-gen-authz-go-proto` |
+| `tolo/operation/v1/operation.proto` | `ghcr.io/pj-hoakari/tolo-operation-proto` |
+| `tolo/kernel/v1/kernel.proto` | `ghcr.io/pj-hoakari/tolo-kernel-proto` |
 
 ### 取得（pull）
 
@@ -219,7 +224,9 @@ golang-migrate CLI は接続先を環境変数からは読まないため、`-da
 
 ```bash
 # 出力先ディレクトリに proto を展開（ディレクトリ構造が復元される）
-oras pull ghcr.io/<owner>/<repo>-proto:latest -o proto
-# import する proto まで含めて展開する
-oras pull ghcr.io/<owner>/<repo>-proto-bundle:latest -o proto
+oras pull ghcr.io/pj-hoakari/tolo-realtime-proto:<version> -o proto
+oras pull ghcr.io/pj-hoakari/protoc-gen-authz-go-proto:<version> -o proto
+# payload を復号するときは Operation と kernel の proto も展開する
+oras pull ghcr.io/pj-hoakari/tolo-operation-proto:<version> -o proto
+oras pull ghcr.io/pj-hoakari/tolo-kernel-proto:<version> -o proto
 ```

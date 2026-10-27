@@ -4,9 +4,6 @@ modules:
 lint:
   use:
     - STANDARD
-  ignore:
-    - proto/tolo/kernel
-    - proto/tolo/operation
 breaking:
   use:
     - FILE

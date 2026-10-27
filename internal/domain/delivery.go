@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/proto"
 
 	operationv1 "github.com/pj-hoakari/tolo-operation/gen/tolo/operation/v1"
 )
@@ -40,7 +41,7 @@ type Delivery struct {
 	ID         DeliveryID
 	EventID    string
 	Recipients []string
-	Payload    *operationv1.DeliveryPayload
+	Payload    []byte
 	SentAt     time.Time
 }
 
@@ -62,6 +63,11 @@ func NewDelivery(order *operationv1.DeliveryOrder, publishedAt time.Time) (Deliv
 		return Delivery{}, ErrPayloadRequired
 	}
 
+	payload, err := proto.Marshal(order.GetPayload())
+	if err != nil {
+		return Delivery{}, fmt.Errorf("marshal delivery payload: %w", err)
+	}
+
 	sentAt := publishedAt
 	if sentAt.IsZero() {
 		sentAt = id.issuedAt()
@@ -71,7 +77,7 @@ func NewDelivery(order *operationv1.DeliveryOrder, publishedAt time.Time) (Deliv
 		ID:         id,
 		EventID:    order.GetEventId(),
 		Recipients: slices.Clone(order.GetRecipientUserIds()),
-		Payload:    order.GetPayload(),
+		Payload:    payload,
 		SentAt:     sentAt,
 	}, nil
 }

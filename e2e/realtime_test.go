@@ -93,8 +93,13 @@ func TestRealtime(t *testing.T) {
 			t.Errorf("宛先の envelopes = %v", mine.GetEnvelopes())
 		}
 
-		if !proto.Equal(mine.GetEnvelopes()[0].GetPayload(), order.GetPayload()) {
-			t.Errorf("payload = %v, want %v", mine.GetEnvelopes()[0].GetPayload(), order.GetPayload())
+		payload := new(operationv1.DeliveryPayload)
+		if err := proto.Unmarshal(mine.GetEnvelopes()[0].GetPayload(), payload); err != nil {
+			t.Fatalf("unmarshal payload: %v", err)
+		}
+
+		if !proto.Equal(payload, order.GetPayload()) {
+			t.Errorf("payload = %v, want %v", payload, order.GetPayload())
 		}
 
 		others := fetch(t, event, "user-2", nil, 0)

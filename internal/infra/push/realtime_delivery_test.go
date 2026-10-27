@@ -95,8 +95,13 @@ func TestRealtimeDeliveryIsLoggedWithThePublishTime(t *testing.T) {
 		t.Errorf("SentAt = %v, want %v", got.SentAt, want)
 	}
 
-	if !proto.Equal(got.Payload, order().GetPayload()) {
-		t.Errorf("payload = %v", got.Payload)
+	payload := new(operationv1.DeliveryPayload)
+	if err := proto.Unmarshal(got.Payload, payload); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+
+	if !proto.Equal(payload, order().GetPayload()) {
+		t.Errorf("payload = %v, want %v", payload, order().GetPayload())
 	}
 }
 
