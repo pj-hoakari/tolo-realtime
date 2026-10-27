@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"slices"
@@ -12,9 +13,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
-	"google.golang.org/protobuf/proto"
 
-	operationv1 "github.com/pj-hoakari/tolo-operation/gen/tolo/operation/v1"
 	"github.com/pj-hoakari/tolo-realtime/internal/domain"
 	"github.com/pj-hoakari/tolo-realtime/internal/repository"
 )
@@ -28,10 +27,8 @@ func newDelivery(t *testing.T, eventID string, recipients ...string) domain.Deli
 		ID:         domain.DeliveryID(uuid.Must(uuid.NewV7()).String()),
 		EventID:    eventID,
 		Recipients: recipients,
-		Payload: &operationv1.DeliveryPayload{Kind: &operationv1.DeliveryPayload_StaffMessage{
-			StaffMessage: &operationv1.StaffMessage{MessageId: uuid.NewString(), Body: "hello"},
-		}},
-		SentAt: time.Date(2026, 10, 24, 9, 0, 0, 0, time.UTC),
+		Payload:    []byte(uuid.NewString()),
+		SentAt:     time.Date(2026, 10, 24, 9, 0, 0, 0, time.UTC),
 	}
 }
 
@@ -95,8 +92,8 @@ func TestDeliveryLogRoundTripsTheDelivery(t *testing.T) {
 		t.Errorf("delivery = %+v, want %+v", got, delivery)
 	}
 
-	if !proto.Equal(got.Payload, delivery.Payload) {
-		t.Errorf("payload = %v, want %v", got.Payload, delivery.Payload)
+	if !bytes.Equal(got.Payload, delivery.Payload) {
+		t.Errorf("payload = %q, want %q", got.Payload, delivery.Payload)
 	}
 }
 

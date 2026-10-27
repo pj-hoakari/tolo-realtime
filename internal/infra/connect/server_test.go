@@ -11,6 +11,7 @@ import (
 
 	connectrpc "connectrpc.com/connect/v2"
 	"connectrpc.com/connect/v2/connecthttp"
+	"google.golang.org/protobuf/proto"
 
 	internaljwt "github.com/pj-hoakari/internal-jwt-handling"
 	"github.com/pj-hoakari/internal-jwt-handling/jwks"
@@ -226,9 +227,14 @@ func TestFetchDeliveriesReturnsTheCallersEnvelopes(t *testing.T) {
 	server := newTestServer(t, keys)
 
 	sentAt := time.Date(2026, 10, 24, 9, 0, 0, 0, time.UTC)
-	payload := &operationv1.DeliveryPayload{Kind: &operationv1.DeliveryPayload_StaffMessage{
+
+	payload, err := proto.Marshal(&operationv1.DeliveryPayload{Kind: &operationv1.DeliveryPayload_StaffMessage{
 		StaffMessage: &operationv1.StaffMessage{MessageId: "message-1", Body: "hello"},
-	}}
+	}})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+
 	server.log.page = repository.DeliveryPage{
 		Deliveries: []domain.Delivery{{ID: "0192c3b4-0000-7000-8000-000000000001", EventID: testEvent, Payload: payload, SentAt: sentAt}},
 		LatestID:   "0192c3b4-0000-7000-8000-000000000002",
@@ -252,10 +258,16 @@ func TestFetchDeliveriesReturnsTheCallersEnvelopes(t *testing.T) {
 	}
 
 	envelope := res.GetEnvelopes()[0]
+
+	got := new(operationv1.DeliveryPayload)
+	if err := proto.Unmarshal(envelope.GetPayload(), got); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+
 	if envelope.GetDeliveryId() != "0192c3b4-0000-7000-8000-000000000001" ||
 		!envelope.GetSentAt().AsTime().Equal(sentAt) ||
-		envelope.GetPayload().GetStaffMessage().GetBody() != "hello" {
-		t.Errorf("envelope = %v", envelope)
+		got.GetStaffMessage().GetBody() != "hello" {
+		t.Errorf("envelope = %v, payload = %v", envelope, got)
 	}
 }
 

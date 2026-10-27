@@ -8,7 +8,6 @@ package realtimev1
 
 import (
 	_ "github.com/pj-hoakari/protoc-gen-authz-go/authz/v1"
-	v1 "github.com/pj-hoakari/tolo-operation/gen/tolo/operation/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -236,7 +235,7 @@ type Envelope struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	DeliveryId    string                 `protobuf:"bytes,1,opt,name=delivery_id,json=deliveryId,proto3" json:"delivery_id,omitempty"`
 	SentAt        *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=sent_at,json=sentAt,proto3" json:"sent_at,omitempty"`
-	Payload       *v1.DeliveryPayload    `protobuf:"bytes,3,opt,name=payload,proto3" json:"payload,omitempty"`
+	Payload       []byte                 `protobuf:"bytes,3,opt,name=payload,proto3" json:"payload,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -285,7 +284,7 @@ func (x *Envelope) GetSentAt() *timestamppb.Timestamp {
 	return nil
 }
 
-func (x *Envelope) GetPayload() *v1.DeliveryPayload {
+func (x *Envelope) GetPayload() []byte {
 	if x != nil {
 		return x.Payload
 	}
@@ -296,7 +295,7 @@ var File_tolo_realtime_v1_realtime_proto protoreflect.FileDescriptor
 
 const file_tolo_realtime_v1_realtime_proto_rawDesc = "" +
 	"\n" +
-	"\x1ftolo/realtime/v1/realtime.proto\x12\x10tolo.realtime.v1\x1a\x16authz/v1/options.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a!tolo/operation/v1/operation.proto\"7\n" +
+	"\x1ftolo/realtime/v1/realtime.proto\x12\x10tolo.realtime.v1\x1a\x16authz/v1/options.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"7\n" +
 	"\x1aIssueFirestoreTokenRequest\x12\x19\n" +
 	"\bevent_id\x18\x01 \x01(\tR\aeventId\"\x8c\x01\n" +
 	"\x1bIssueFirestoreTokenResponse\x122\n" +
@@ -311,12 +310,12 @@ const file_tolo_realtime_v1_realtime_proto_rawDesc = "" +
 	"\x1a_long_poll_timeout_seconds\"\x81\x01\n" +
 	"\x17FetchDeliveriesResponse\x128\n" +
 	"\tenvelopes\x18\x01 \x03(\v2\x1a.tolo.realtime.v1.EnvelopeR\tenvelopes\x12,\n" +
-	"\x12latest_delivery_id\x18\x02 \x01(\tR\x10latestDeliveryId\"\x9e\x01\n" +
+	"\x12latest_delivery_id\x18\x02 \x01(\tR\x10latestDeliveryId\"z\n" +
 	"\bEnvelope\x12\x1f\n" +
 	"\vdelivery_id\x18\x01 \x01(\tR\n" +
 	"deliveryId\x123\n" +
-	"\asent_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x06sentAt\x12<\n" +
-	"\apayload\x18\x03 \x01(\v2\".tolo.operation.v1.DeliveryPayloadR\apayload2\xba\x02\n" +
+	"\asent_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x06sentAt\x12\x18\n" +
+	"\apayload\x18\x03 \x01(\fR\apayload2\xba\x02\n" +
 	"\x14RealtimeFetchService\x12\x89\x01\n" +
 	"\x0fFetchDeliveries\x12(.tolo.realtime.v1.FetchDeliveriesRequest\x1a).tolo.realtime.v1.FetchDeliveriesResponse\"!\x8a\xb5\x18\x1d\b\x02\x12\vevents.read\x1a\fevent_access\x12\x95\x01\n" +
 	"\x13IssueFirestoreToken\x12,.tolo.realtime.v1.IssueFirestoreTokenRequest\x1a-.tolo.realtime.v1.IssueFirestoreTokenResponse\"!\x8a\xb5\x18\x1d\b\x02\x12\vevents.read\x1a\fevent_accessB\xcc\x01\n" +
@@ -342,22 +341,20 @@ var file_tolo_realtime_v1_realtime_proto_goTypes = []any{
 	(*FetchDeliveriesResponse)(nil),     // 3: tolo.realtime.v1.FetchDeliveriesResponse
 	(*Envelope)(nil),                    // 4: tolo.realtime.v1.Envelope
 	(*timestamppb.Timestamp)(nil),       // 5: google.protobuf.Timestamp
-	(*v1.DeliveryPayload)(nil),          // 6: tolo.operation.v1.DeliveryPayload
 }
 var file_tolo_realtime_v1_realtime_proto_depIdxs = []int32{
 	5, // 0: tolo.realtime.v1.IssueFirestoreTokenResponse.expires_at:type_name -> google.protobuf.Timestamp
 	4, // 1: tolo.realtime.v1.FetchDeliveriesResponse.envelopes:type_name -> tolo.realtime.v1.Envelope
 	5, // 2: tolo.realtime.v1.Envelope.sent_at:type_name -> google.protobuf.Timestamp
-	6, // 3: tolo.realtime.v1.Envelope.payload:type_name -> tolo.operation.v1.DeliveryPayload
-	2, // 4: tolo.realtime.v1.RealtimeFetchService.FetchDeliveries:input_type -> tolo.realtime.v1.FetchDeliveriesRequest
-	0, // 5: tolo.realtime.v1.RealtimeFetchService.IssueFirestoreToken:input_type -> tolo.realtime.v1.IssueFirestoreTokenRequest
-	3, // 6: tolo.realtime.v1.RealtimeFetchService.FetchDeliveries:output_type -> tolo.realtime.v1.FetchDeliveriesResponse
-	1, // 7: tolo.realtime.v1.RealtimeFetchService.IssueFirestoreToken:output_type -> tolo.realtime.v1.IssueFirestoreTokenResponse
-	6, // [6:8] is the sub-list for method output_type
-	4, // [4:6] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	2, // 3: tolo.realtime.v1.RealtimeFetchService.FetchDeliveries:input_type -> tolo.realtime.v1.FetchDeliveriesRequest
+	0, // 4: tolo.realtime.v1.RealtimeFetchService.IssueFirestoreToken:input_type -> tolo.realtime.v1.IssueFirestoreTokenRequest
+	3, // 5: tolo.realtime.v1.RealtimeFetchService.FetchDeliveries:output_type -> tolo.realtime.v1.FetchDeliveriesResponse
+	1, // 6: tolo.realtime.v1.RealtimeFetchService.IssueFirestoreToken:output_type -> tolo.realtime.v1.IssueFirestoreTokenResponse
+	5, // [5:7] is the sub-list for method output_type
+	3, // [3:5] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_tolo_realtime_v1_realtime_proto_init() }
