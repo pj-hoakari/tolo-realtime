@@ -30,7 +30,6 @@ Firestore に配信内容は置かない（最終更新IDのみ。正本は配�
 syntax = "proto3";
 package tolo.realtime.v1;
 import "google/protobuf/timestamp.proto";
-import "tolo/operation/v1/operation.proto";
 
 service RealtimeFetchService {
   // スタッフアプリ → 本サービス（pull。起点は Firestore リスナーの変更検知、フォールバックはロングポーリング）
@@ -57,17 +56,18 @@ message FetchDeliveriesResponse {
   string latest_delivery_id = 2;    // Firestore の最終更新IDと対応
 }
 
-// 配信内容（oneof で型付け）
+// 配信内容
 message Envelope {
   string delivery_id = 1;  // UUIDv7（resume に使用）
   google.protobuf.Timestamp sent_at = 2;
-  tolo.operation.v1.DeliveryPayload payload = 3;  // DeliveryOrder の配信内容をそのまま返す
+  bytes payload = 3;  // tolo.operation.v1.DeliveryPayload を符号化したバイト列。DeliveryOrder の配信内容をそのまま返す
 }
 ```
 
 ## 補足
 
-- 配信内容の型は Operation の型（`tolo.operation.v1`）を参照し、本サービスでは定義しない。`realtime-delivery` のペイロード `DeliveryOrder` も Operation が定義し、本サービスは Operation の Go モジュールを import して復号する（ADR-0106）。Flow Control／Line Control の proto（`tolo.flow.v1`／`tolo.line.v1`）は import しない
+- 配信内容の型は Operation の `tolo.operation.v1.DeliveryPayload` であり、本サービスでは定義しない。`FetchDeliveries` はこれを符号化したバイト列で返し、本サービスの proto は Operation の proto を import しない。スタッフアプリは Operation の proto から生成した型で復号する（ADR-0114）
+  `realtime-delivery` のペイロード `DeliveryOrder` も Operation が定義し、本サービスは Operation の Go モジュールを import して復号する（ADR-0106）。Flow Control／Line Control の proto（`tolo.flow.v1`／`tolo.line.v1`）は import しない
   提案・行列案内は、観測が Flow／Line の応答から Operation の型へ変換したものである（Operation、Observation）
 - 配信の流れ: Operation が DeliveryOrder を publish（delivery_id を採番）→ 本サービスが購読 → 配信ログへ永続化（delivery_id で重複排除）→ Firestore の最終更新ID更新 → リスナー検知 → FetchDeliveries → 未達分の返却
 - FetchDeliveries を含む本サービスの RPC は、他サービス同様 Service Gateway 経由で提供する（明示した例外を除き Service Gateway を必ず経由する方針。context_map 等の「GW経由」表記と対応）
