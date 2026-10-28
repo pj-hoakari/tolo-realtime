@@ -12,7 +12,7 @@ tool (
 
 require (
 	cloud.google.com/go/firestore v1.27.0
-	connectrpc.com/connect/v2 v2.0.1
+	connectrpc.com/connect/v2 v2.0.2
 	connectrpc.com/otelconnect v0.12.0
 	firebase.google.com/go/v4 v4.22.0
 	github.com/XSAM/otelsql v0.44.0
