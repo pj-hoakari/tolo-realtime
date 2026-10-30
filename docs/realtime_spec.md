@@ -11,7 +11,7 @@ package: `tolo.realtime.v1`
 変更通知には Firestore を使う。イベント単位の文書に最終更新ID（UUIDv7。タイムスタンプ順序特性を持つ）のみを保持し、
 スタッフアプリはリアルタイムリスナーで変更を検知してイベントドリブンに pull する
 Firestore が使えない環境や障害時は、ロングポーリング（`long_poll_timeout_seconds`）にフォールバックする
-Firestore に配信内容は置かない（最終更新IDのみ。正本は配信ログ）
+Firestore に配信内容は置かない（最終更新IDのみ。配信内容は配信ログが持つ）
 
 ## 入出力一覧
 
@@ -75,7 +75,7 @@ message Envelope {
   文書はイベント単位で最終更新IDのみを持つ。文書の粒度（イベント単位／ユーザ単位）の最適化は実装フェーズで検証する
   文書のパスは `deliveryNotifications/{event_id}`、フィールドは `latestDeliveryId`（文字列）とする。`DeliveryOrder` はテナントを持たないので、パスにテナントを含めない
   `latestDeliveryId` は、そのイベントで最後に配信ログへ届いた配信の `delivery_id` である。再配信を受けたときも、配信ログの最後の配信で書き直す。Firestore への書き込みに失敗した push は一時的な失敗とし、再配信で書き直す
-- 配信ログは読み取りモデル（複製）であり、正本は Operation・観測側の永続化にある
+- 配信ログは読み取りモデル（複製）であり、元のデータは Operation・観測側の永続化が所有する
   保持期間はテナント設定値とし、既定値は実装フェーズで検証する。超過時は全量再取得（参照系 API）へフォールバックする
 - `realtime-delivery` は HTTP の push で `POST /push/realtime-delivery` に受ける。受け口の形と応答の規約は service_transport.md の「情報更新 push の受け口」に従う
   本サービスの受け口が恒久的な失敗として扱うのは、ペイロードを復号できない場合だけである。`delivery_id` が UUIDv7 でない、`event_id` が空、宛先がない、`payload` がない `DeliveryOrder` も、復号できないものとして扱う。本サービスはイベントの存在を知らないので、対象のイベントが存在しないことでは失敗としない
