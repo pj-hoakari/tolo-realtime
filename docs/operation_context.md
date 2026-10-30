@@ -24,7 +24,7 @@
 | テナント内集約 | FeedbackAccumulated | Operation: DeliveryCoordinationService.RecordFeedbackValues（観測から） |
 | テナント内集約 | FeedbackAnonymized | Operation 内部バッチ（→ RefAgg: SubmitAnonymizedFeedback へ投入） |
 
-手動介入（危険フラグ等）と運用状態の変更（ゲート開閉 GateOpened／GateClosed・観測点設定変更）は誘導への介入として誘導ドメインに属し、本コンテキストの外にある（受け口は 観測コンテキスト）
+手動介入（危険フラグ等）と運用状態の変更（ゲート開閉 GateOpened／GateClosed・観測点設定変更）は誘導への介入として誘導ドメインに属し、本コンテキストの外にある（受け付けるのは観測。観測コンテキスト）
 
 ## 他コンテキストとの接点
 

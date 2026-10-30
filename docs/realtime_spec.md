@@ -77,8 +77,8 @@ message Envelope {
   `latestDeliveryId` は、そのイベントで最後に配信ログへ届いた配信の `delivery_id` である。再配信を受けたときも、配信ログの最後の配信で書き直す。Firestore への書き込みに失敗した push は一時的な失敗とし、再配信で書き直す
 - 配信ログは読み取りモデル（複製）であり、元のデータは Operation・観測側の永続化が所有する
   保持期間はテナント設定値とし、既定値は実装フェーズで検証する。超過時は全量再取得（参照系 API）へフォールバックする
-- `realtime-delivery` は HTTP の push で `POST /push/realtime-delivery` に受ける。受け口の形と応答の規約は service_transport.md の「情報更新 push の受け口」に従う
-  本サービスの受け口が恒久的な失敗として扱うのは、ペイロードを復号できない場合だけである。`delivery_id` が UUIDv7 でない、`event_id` が空、宛先がない、`payload` がない `DeliveryOrder` も、復号できないものとして扱う。本サービスはイベントの存在を知らないので、対象のイベントが存在しないことでは失敗としない
+- `realtime-delivery` は HTTP の push で `POST /push/realtime-delivery` に受ける。受信エンドポイントの形と応答の規約は service_transport.md の「情報更新 push の受信エンドポイント」に従う
+  本サービスの受信エンドポイントが恒久的な失敗として扱うのは、ペイロードを復号できない場合だけである。`delivery_id` が UUIDv7 でない、`event_id` が空、宛先がない、`payload` がない `DeliveryOrder` も、復号できないものとして扱う。本サービスはイベントの存在を知らないので、対象のイベントが存在しないことでは失敗としない
 - 配信の再試行はブローカーに委譲する（at-least-once）。Operation が再試行するのは publish 失敗時だけである
   恒久的な失敗（復号できない、など）として受け取り済みにした配信は、上流から取り直す経路がなく、開いているスタッフアプリに届かない（ADR-0108）
   再配信による重複は delivery_id で排除する
