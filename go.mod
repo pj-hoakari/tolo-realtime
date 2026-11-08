@@ -21,9 +21,9 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.12.0
 	github.com/jmoiron/sqlx v1.4.0
-	github.com/pj-hoakari/internal-jwt-handling v0.5.0-dev
+	github.com/pj-hoakari/internal-jwt-handling v0.5.0
 	github.com/pj-hoakari/protoc-gen-authz-go v0.4.1
-	github.com/pj-hoakari/tolo-operation v0.2.0-dev
+	github.com/pj-hoakari/tolo-operation v0.4.0
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0
